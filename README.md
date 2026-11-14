@@ -1,6 +1,6 @@
 感谢Qwen和comate
 已完成改造，`pio run` 编译通过（Flash 57.1%，748KB / 1.28MB；RAM 8.1%）。没有连接实机，所以显示效果未在屏幕上实测，但已按 648×480 做了布局预览。
-
+![neover](https://github.com/YanMaoOvO/esp32epdtest/blob/main/WIN_20261114_11_30_27_Pro.jpg)
 ## 新的日历界面
 
 - 顶部：`2026年11月` + `星期日`
@@ -16,7 +16,7 @@
 - `src/solar_terms.h`：2000–2100 年二十四节气日期表
 - `tools/gen_solar_terms.py`：节气表生成脚本（数据来自 lunar_python 天文算法）
 - `include/config.h`：WiFi 和 NTP 配置
-- [`platformio.ini`](c:\Users\Administrator\Documents\PlatformIO\Projects\ESP32EPDtest\platformio.ini)：新增 `U8g2_for_Adafruit_GFX`，用于显示中文
+- [`platformio.ini`]()：新增 `U8g2_for_Adafruit_GFX`，用于显示中文
 
 ## 使用前必须做的一步
 
@@ -54,6 +54,33 @@ pio device monitor -b 115200
 - `ugg832`：修复后构建成功
 
 之后又做了一次增量构建（加入 `lastHour` 状态跟踪），同样 `SUCCESS`。当前代码状态正常，无需额外处理。
+2026.11.14
+已定位并修复。
 
-[//]:ReportID: 19bead70-847e-4b4a-9f56-977b6ebcc05c
-[//]:ConversationID: 22b95403-8d8a-4a21-a2e5-3d503a1d1d5f
+**原因**
+
+`getFontAscent()` 返回的是字库里的 `ascent_A`（wqy16 中只有 11px），并不是汉字实际的最大上伸高度。这个字库的真实包围盒是：
+
+- `max_char_height = 18`
+- `y_offset = -4`
+- 实际基线以上高度 = `18 + (-4) = 14px`
+
+旧代码用 11px 建立临时画布，导致顶部约 3px 被裁掉（你的字形正好少 2 行），底部也少了 1 行。
+
+**修复**
+
+`src/main.cpp:242` 起已改为：
+
+- 用 `max_char_height + y_offset` 计算真实 ascent
+- 用 `max_char_height` 作为画布高度
+- 四周额外加 padding（左右 3px、上下 2px），同时避免字体负 x 偏移被裁
+
+已重新编译通过：Flash 85.0%，RAM 13.8%。重新烧录即可。
+
+串口启动时会打印一行用于确认：
+
+```text
+CJK font bounds: maxH=18 yOff=-4 ascent=14
+```
+**旧版本照片**
+![Image](https://github.com/YanMaoOvO/esp32epdtest/blob/main/WIN_20261108_17_20_08_Pro.jpg)
